@@ -8,6 +8,38 @@ from dotenv import load_dotenv
 load_dotenv()
 NASA_API_KEY = os.getenv("NASA_API_KEY")
 
+def fetch_random_nasa_image():
+    """
+    Fallback mechanism: Requests a random historical entry from NASA's APOD archive,
+    ensuring we get a high-res image asset.
+    """
+    print("[!] Initiating Random Cosmic Archive fallback...")
+    # Passing count=1 to get a single random entry
+    url = f"https://api.nasa.gov/planetary/apod?api_key={NASA_API_KEY}&count=1"
+
+    try:
+        response = requests.get(url, timeout=30)
+        if response.status_code == 200:
+            data = response.json()[0]
+
+            if data.get("media_type") == "image" and (data.get("hdurl") or data.get("url")):
+                img_url = data.get("hdurl") or data.get("url")
+                print(f"[+] Found random historical gem: {img_url}")
+                print(f"[+] Streaming random HD asset: {img_url}")
+
+                img_response = requests.get(img_url, stream=True, timeout=15)
+                if img_response.status_code == 200:
+                    local_filename = "wallpapers/nasa_daily.jpg"
+                    with open(local_filename, 'wb') as f:
+                        for chunk in img_response.iter_content(1024):
+                            f.write(chunk)
+                        return local_filename
+        print("[-] Failed to grab a valid random asset from archive.")
+        return None
+    except Exception as e:
+        print(f"[-] Random archive connection dropped: {e}")
+        return None
+
 def fetch_nasa_apod():
     """
     Hits the NASA APOD API using an environment-loaded key, parses the data,
@@ -37,14 +69,15 @@ def fetch_nasa_apod():
         print(f"Date: {data.get('date')}")
         print(f"Explanation: {data.get('explanation')[:150]}...\n")
 
+        # Filter out non-image media types
         if data.get("media_type") != "image":
-            print("[-] Today's payload is a video/article format. Skipping download.")
-            return None
+            print("[-] Today's content is a video format. Redirecting to random image archive...")
+            return fetch_random_nasa_image()
         
         img_url = data.get("hdurl") or data.get("url")
         if not img_url:
-            print("[-] No valid image vectors mapped inside data asset payload.")
-            return None
+            print("[-] No valid image vectors mapped inside data asset payload. Redirecting to random image archive...")
+            return fetch_random_nasa_image()
         
         print(f"[+] Streaming down high-res asset: {img_url}")
 
@@ -62,7 +95,7 @@ def fetch_nasa_apod():
         
     except Exception as e:
         print(f"[-] Critical connection dropout: {e}")
-        return None
+        return fetch_random_nasa_image()
 
 def set_wallpaper(relative_image_path):
     """
