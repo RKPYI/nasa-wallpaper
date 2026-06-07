@@ -7,6 +7,29 @@ from dotenv import load_dotenv
 # Load environment keys from .env file
 load_dotenv()
 NASA_API_KEY = os.getenv("NASA_API_KEY")
+WALLPAPER_PATH = "wallpapers/nasa_daily.jpg"
+
+def download_image(url, save_path):
+    """
+    Utility Helper: Streams and saves a network image asset to disk.
+    """
+    print(f"[+] Streaming asset down from: {url}")
+    try:
+        response = requests.get(url, stream=True, timeout=20)
+        if response.status_code != 200:
+            print(f"[-] Download failed: HTTP Status {response.status_code}")
+            return False
+        
+        os.makedirs(os.path.dirname(save_path), exist_ok=True)
+        with open(save_path, 'wb') as f:
+            for chunk in response.iter_content(1024):
+                f.write(chunk)
+        
+        print(f"[+] Asset safely stored at: {save_path}")
+        return True
+    except Exception as e:
+        print(f"[-] Download interrupted by network fault: {e}")
+        return False
 
 def fetch_random_nasa_image():
     """
@@ -19,22 +42,27 @@ def fetch_random_nasa_image():
 
     try:
         response = requests.get(url, timeout=30)
-        if response.status_code == 200:
-            data = response.json()[0]
 
-            if data.get("media_type") == "image" and (data.get("hdurl") or data.get("url")):
-                img_url = data.get("hdurl") or data.get("url")
-                print(f"[+] Found random historical gem: {img_url}")
-                print(f"[+] Streaming random HD asset: {img_url}")
+        if response.status_code != 200:
+            print(f"[-] Random Archive API returned error status: {response.status_code}")
+            return None
+        
+        data = response.json()[0]
 
-                img_response = requests.get(img_url, stream=True, timeout=15)
-                if img_response.status_code == 200:
-                    local_filename = "wallpapers/nasa_daily.jpg"
-                    with open(local_filename, 'wb') as f:
-                        for chunk in img_response.iter_content(1024):
-                            f.write(chunk)
-                        return local_filename
-        print("[-] Failed to grab a valid random asset from archive.")
+        # Guard clause: Ensure it's a valid image entry
+        if data.get("media_type") != "image":
+            print("[-] Randomly pulled asset was a video format. Retrying...")
+            return fetch_random_nasa_image() # Safe recursive retry
+        
+        img_url = data.get("hdurl") or data.get("url")
+        if not img_url:
+            print("[-] No valid image URL found in random entry. Retrying...")
+            return fetch_random_nasa_image() # Safe recursive retry
+        
+        print(f"[+] Discovered archive gem: '{data.get('title')}")
+        if download_image(img_url, WALLPAPER_PATH):
+            return WALLPAPER_PATH
+        
         return None
     except Exception as e:
         print(f"[-] Random archive connection dropped: {e}")
@@ -67,7 +95,6 @@ def fetch_nasa_apod():
         print(f"\n[ NASA APOD Info ]")
         print(f"Title: {data.get('title')}")
         print(f"Date: {data.get('date')}")
-        print(f"Explanation: {data.get('explanation')[:150]}...\n")
 
         # Filter out non-image media types
         if data.get("media_type") != "image":
@@ -78,21 +105,12 @@ def fetch_nasa_apod():
         if not img_url:
             print("[-] No valid image vectors mapped inside data asset payload. Redirecting to random image archive...")
             return fetch_random_nasa_image()
-        
-        print(f"[+] Streaming down high-res asset: {img_url}")
 
-        img_response = requests.get(img_url, stream=True, timeout=15)
-        if img_response.status_code == 200:
-            os.makedirs("wallpapers", exist_ok=True)
-            local_filename = "wallpapers/nasa_daily.jpg"
-
-            with open(local_filename, 'wb') as f:
-                for chunk in img_response.iter_content(1024):
-                    f.write(chunk)
-            
-            print(f"[+] Download phase successfully closed out: {local_filename}")
-            return local_filename
+        if download_image(img_url, WALLPAPER_PATH):
+            return WALLPAPER_PATH
         
+        return fetch_random_nasa_image() # Fallback to random archive
+    
     except Exception as e:
         print(f"[-] Critical connection dropout: {e}")
         return fetch_random_nasa_image()
