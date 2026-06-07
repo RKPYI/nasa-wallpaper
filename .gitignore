@@ -1,1 +1,4 @@
 .env
+.venv
+__pycache__/
+wallpapers/nasa_daily.jpg
