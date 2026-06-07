@@ -59,7 +59,7 @@ def fetch_random_nasa_image():
             print("[-] No valid image URL found in random entry. Retrying...")
             return fetch_random_nasa_image() # Safe recursive retry
         
-        print(f"[+] Discovered archive gem: '{data.get('title')}")
+        print(f"[+] Discovered archive gem: '{data.get('title')}'")
         if download_image(img_url, WALLPAPER_PATH):
             return WALLPAPER_PATH
         
